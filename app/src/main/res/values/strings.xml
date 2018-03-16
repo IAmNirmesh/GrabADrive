@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Grab A Drive</string>
+    <string name="title_activity_welcome">Map</string>
+    <string name="google_direction_api">AIzaSyD7BTLVAvOElojOB33o9eyHQL1O-EtgqCM</string>
 </resources>

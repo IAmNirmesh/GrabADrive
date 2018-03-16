@@ -1,8 +1,9 @@
 package rahul.nirmesh.grabadrive;
 
-import android.*;
 import android.Manifest;
+import android.animation.ValueAnimator;
 import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.location.Location;
 import android.os.Handler;
 import android.os.SystemClock;
@@ -13,8 +14,11 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
+import android.widget.Button;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import com.firebase.geofire.GeoFire;
@@ -26,18 +30,38 @@ import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
+import com.google.android.gms.maps.model.CameraPosition;
+import com.google.android.gms.maps.model.JointType;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.LatLngBounds;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Polyline;
+import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.android.gms.maps.model.SquareCap;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import rahul.nirmesh.grabadrive.common.Common;
+import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 public class Welcome extends FragmentActivity
         implements OnMapReadyCallback,
@@ -67,6 +91,63 @@ public class Welcome extends FragmentActivity
 
     SupportMapFragment mapFragment;
 
+    // Car Animation
+    private List<LatLng> polyLineList;
+    private Marker carMarker;
+    private float v;
+    private double lat, lng;
+    private Handler handler;
+    private LatLng startPosition, endPosition, currentPosition;
+    private int index, next;
+    private Button btnGo;
+    private EditText editPlace;
+    private String destination;
+    private PolylineOptions polylineOptions, blackPolylineOptions;
+    private Polyline blackPolyline, greyPolyline;
+
+    private IGoogleAPI mService;
+
+    Runnable drawPathRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (index < polyLineList.size() - 1) {
+                index++;
+                next = index + 1;
+            }
+
+            if (index < polyLineList.size() - 1) {
+                startPosition = polyLineList.get(index);
+                endPosition = polyLineList.get(next);
+            }
+
+            ValueAnimator valueAnimator = ValueAnimator.ofFloat(0, 1);
+            valueAnimator.setDuration(3000);
+            valueAnimator.setInterpolator(new LinearInterpolator());
+            valueAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                @Override
+                public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                    v = valueAnimator.getAnimatedFraction();
+                    lng = v * endPosition.longitude + (1 - v) * startPosition.longitude;
+                    lat = v * endPosition.latitude + (1 - v) * startPosition.latitude;
+
+                    LatLng newPos = new LatLng(lat, lng);
+                    carMarker.setPosition(newPos);
+                    carMarker.setAnchor(0.5f, 0.5f);
+                    carMarker.setRotation(getBearing(startPosition, newPos));
+                    mMap.moveCamera(CameraUpdateFactory.newCameraPosition(
+                            new CameraPosition.Builder()
+                                    .target(newPos)
+                                    .zoom(15.5f)
+                                    .build()
+                    ));
+                }
+            });
+
+            valueAnimator.start();
+            handler.postDelayed(this, 3000);
+        }
+    };
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -85,8 +166,25 @@ public class Welcome extends FragmentActivity
                 } else {
                     stopLocationUpdates();
                     mCurrent.remove();
+                    mMap.clear();
+                    handler.removeCallbacks(drawPathRunnable);
                     Snackbar.make(mapFragment.getView(), "You are Offline.", Snackbar.LENGTH_SHORT).show();
                 }
+            }
+        });
+
+        polyLineList = new ArrayList<>();
+        editPlace = findViewById(R.id.editPlace);
+        btnGo = findViewById(R.id.btnGo);
+
+        btnGo.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                destination = editPlace.getText().toString();
+                destination = destination.replace(" ", "+"); // Replace spaces with + for fetching data
+                Log.d("NIRMESH", destination);
+
+                getDirections();
             }
         });
 
@@ -95,6 +193,8 @@ public class Welcome extends FragmentActivity
         geoFire = new GeoFire(drivers);
 
         setUpLocation();
+
+        mService = Common.getGoogleAPI();
     }
 
     @Override
@@ -116,6 +216,11 @@ public class Welcome extends FragmentActivity
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
+        mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
+        mMap.setTrafficEnabled(false);
+        mMap.setIndoorEnabled(false);
+        mMap.setBuildingsEnabled(false);
+        mMap.getUiSettings().setZoomControlsEnabled(true);
     }
 
     @Override
@@ -171,15 +276,11 @@ public class Welcome extends FragmentActivity
                                 if (mCurrent != null)
                                     mCurrent.remove(); // Remove the Current State
                                 mCurrent = mMap.addMarker(new MarkerOptions()
-                                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.car))
                                                 .position(new LatLng(latitude, longitude))
                                                 .title("You"));
 
                                 // Move Camera to this Current Marker Location
                                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 15.0f));
-
-                                // Draw Animation Rotate Marker
-                                rotateMarker(mCurrent, -360, mMap);
                             }
                         }
                 );
@@ -272,5 +373,164 @@ public class Welcome extends FragmentActivity
         mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setSmallestDisplacement(DISPLACEMENT);
+    }
+
+    private float getBearing(LatLng startPosition, LatLng endPosition) {
+
+        double lat = Math.abs(startPosition.latitude - endPosition.latitude);
+        double lng = Math.abs(startPosition.longitude - endPosition.longitude);
+
+        if (startPosition.latitude < endPosition.latitude && startPosition.longitude < endPosition.longitude)
+            return (float) (Math.toDegrees(Math.atan(lng / lat)));
+
+        else if (startPosition.latitude >= endPosition.latitude && startPosition.longitude < endPosition.longitude)
+            return (float) ((90 - Math.toDegrees(Math.atan(lng / lat))) + 90);
+
+        else if (startPosition.latitude >= endPosition.latitude && startPosition.longitude >= endPosition.longitude)
+            return (float) (Math.toDegrees(Math.atan(lng / lat)) + 180);
+
+        else if (startPosition.latitude < endPosition.latitude && startPosition.longitude >= endPosition.longitude)
+            return (float) ((90 - Math.toDegrees(Math.atan(lng / lat))) + 270);
+
+        return -1;
+    }
+
+    private void getDirections() {
+        currentPosition = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+
+        String requestApi = null;
+
+        try {
+            requestApi = "https://maps.googleapis.com/maps/api/directions/json?" +
+                    "mode=driving&" +
+                    "transit_routing_preference=less_driving&" +
+                    "origin=" + currentPosition.latitude + "," + currentPosition.longitude + "&" +
+                    "destination=" + destination + "&" +
+                    "key=" + getResources().getString(R.string.google_direction_api);
+
+            Log.d("NIRMESH", requestApi);
+
+            mService.getPath(requestApi).enqueue(new Callback<String>() {
+                @Override
+                public void onResponse(Call<String> call, Response<String> response) {
+                    try {
+                        JSONObject jsonObject = new JSONObject(response.body().toString());
+                        JSONArray jsonArray = jsonObject.getJSONArray("routes");
+                        for (int i = 0; i < jsonArray.length(); i++) {
+                            JSONObject route = jsonArray.getJSONObject(i);
+                            JSONObject poly = route.getJSONObject("overview_polyline");
+                            String polyline = poly.getString("points");
+                            polyLineList = decodePoly(polyline);
+                        }
+
+                        // Adjusting Bounds
+                        LatLngBounds.Builder builder = new LatLngBounds.Builder();
+                        for (LatLng latLng : polyLineList)
+                            builder.include(latLng);
+
+                        LatLngBounds bounds = builder.build();
+                        CameraUpdate mCameraUpdate = CameraUpdateFactory.newLatLngBounds(bounds, 2);
+                        mMap.animateCamera(mCameraUpdate);
+
+                        polylineOptions = new PolylineOptions();
+                        polylineOptions.color(Color.GRAY);
+                        polylineOptions.width(5);
+                        polylineOptions.startCap(new SquareCap());
+                        polylineOptions.endCap(new SquareCap());
+                        polylineOptions.jointType(JointType.ROUND);
+                        polylineOptions.addAll(polyLineList);
+                        greyPolyline = mMap.addPolyline(polylineOptions);
+
+                        blackPolylineOptions = new PolylineOptions();
+                        blackPolylineOptions.color(Color.BLACK);
+                        blackPolylineOptions.width(5);
+                        blackPolylineOptions.startCap(new SquareCap());
+                        blackPolylineOptions.endCap(new SquareCap());
+                        blackPolylineOptions.jointType(JointType.ROUND);
+                        blackPolyline = mMap.addPolyline(blackPolylineOptions);
+
+                        mMap.addMarker(new MarkerOptions()
+                                .position(polyLineList.get(polyLineList.size() - 1))
+                                .title("Pickup Location"));
+
+                        // Begin Animation
+                        ValueAnimator polyLineAnimator = ValueAnimator.ofInt(0, 100);
+                        polyLineAnimator.setDuration(2000);
+                        polyLineAnimator.setInterpolator(new LinearInterpolator());
+                        polyLineAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                            @Override
+                            public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                                List<LatLng> points = greyPolyline.getPoints();
+                                int percentValue = (int) valueAnimator.getAnimatedValue();
+                                int size = points.size();
+                                int newPoints = (int) (size * (percentValue / 100.0f));
+                                List<LatLng> p = points.subList(0, newPoints);
+                                blackPolyline.setPoints(p);
+                            }
+                        });
+
+                        polyLineAnimator.start();
+
+                        carMarker = mMap.addMarker(new MarkerOptions().position(currentPosition)
+                                .flat(true)
+                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.car)));
+
+                        handler = new Handler();
+                        index = -1;
+                        next = 1;
+                        handler.postDelayed(drawPathRunnable, 3000);
+
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<String> call, Throwable t) {
+                    Toast.makeText(Welcome.this, "" + t.getMessage(), Toast.LENGTH_SHORT).show();
+                }
+            });
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    /**
+     * +     * Method to decode polyline points
+     * +     * Courtesy : jeffreysambells.com/2010/05/27/decoding-polylines-from-google-maps-direction-api-with-java
+     * +     *
+     */
+    private List decodePoly(String encoded) {
+
+        List poly = new ArrayList();
+        int index = 0, len = encoded.length();
+        int lat = 0, lng = 0;
+
+        while (index < len) {
+            int b, shift = 0, result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lat += dlat;
+
+            shift = 0;
+            result = 0;
+            do {
+                b = encoded.charAt(index++) - 63;
+                result |= (b & 0x1f) << shift;
+                shift += 5;
+            } while (b >= 0x20);
+            int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+            lng += dlng;
+
+            LatLng p = new LatLng((((double) lat / 1E5)),
+                    (((double) lng / 1E5)));
+            poly.add(p);
+        }
+
+        return poly;
     }
 }
