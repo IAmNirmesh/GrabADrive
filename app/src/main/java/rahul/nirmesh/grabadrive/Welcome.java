@@ -14,11 +14,8 @@ import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.View;
 import android.view.animation.Interpolator;
 import android.view.animation.LinearInterpolator;
-import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Toast;
 
 import com.firebase.geofire.GeoFire;
@@ -27,9 +24,13 @@ import com.github.glomadrian.materialanimatedswitch.MaterialAnimatedSwitch;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
+import com.google.android.gms.common.api.Status;
 import com.google.android.gms.location.LocationListener;
 import com.google.android.gms.location.LocationRequest;
 import com.google.android.gms.location.LocationServices;
+import com.google.android.gms.location.places.Place;
+import com.google.android.gms.location.places.ui.PlaceAutocompleteFragment;
+import com.google.android.gms.location.places.ui.PlaceSelectionListener;
 import com.google.android.gms.maps.CameraUpdate;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
@@ -71,7 +72,6 @@ public class Welcome extends FragmentActivity
 
     private GoogleMap mMap;
 
-    // PLAY SERVICES
     private static final int MY_PERMISSION_REQUEST_CODE = 7000;
     private static final int PLAY_SERVICE_RES_REQUEST = 7001;
 
@@ -91,7 +91,6 @@ public class Welcome extends FragmentActivity
 
     SupportMapFragment mapFragment;
 
-    // Car Animation
     private List<LatLng> polyLineList;
     private Marker carMarker;
     private float v;
@@ -99,8 +98,7 @@ public class Welcome extends FragmentActivity
     private Handler handler;
     private LatLng startPosition, endPosition, currentPosition;
     private int index, next;
-    private Button btnGo;
-    private EditText editPlace;
+    private PlaceAutocompleteFragment places;
     private String destination;
     private PolylineOptions polylineOptions, blackPolylineOptions;
     private Polyline blackPolyline, greyPolyline;
@@ -174,17 +172,24 @@ public class Welcome extends FragmentActivity
         });
 
         polyLineList = new ArrayList<>();
-        editPlace = findViewById(R.id.editPlace);
-        btnGo = findViewById(R.id.btnGo);
 
-        btnGo.setOnClickListener(new View.OnClickListener() {
+        places = (PlaceAutocompleteFragment) getFragmentManager().findFragmentById(R.id.place_autocomplete_fragment);
+        places.setOnPlaceSelectedListener(new PlaceSelectionListener() {
             @Override
-            public void onClick(View view) {
-                destination = editPlace.getText().toString();
-                destination = destination.replace(" ", "+"); // Replace spaces with + for fetching data
-                Log.d("NIRMESH", destination);
+            public void onPlaceSelected(Place place) {
+                if (location_switch.isChecked()) {
+                    destination = place.getAddress().toString();
+                    destination = destination.replace(" ", "+");
 
-                getDirections();
+                    getDirections();
+                } else {
+                    Toast.makeText(Welcome.this, "Please change your status to ONLINE", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onError(Status status) {
+                Toast.makeText(Welcome.this, "" + status.toString(), Toast.LENGTH_SHORT).show();
             }
         });
 

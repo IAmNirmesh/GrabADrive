@@ -12,20 +12,13 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
-        <EditText
-            android:id="@+id/editPlace"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
+        <fragment
+            android:id="@+id/place_autocomplete_fragment"
+            android:name="com.google.android.gms.location.places.ui.PlaceAutocompleteFragment"
             android:layout_margin="10dp"
             android:layout_weight="5"
-            android:hint="Enter Pick Up Location" />
-
-        <Button
-            android:id="@+id/btnGo"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="GO" />
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
 
     </LinearLayout>
 
