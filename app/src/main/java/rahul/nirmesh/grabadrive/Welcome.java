@@ -50,6 +50,7 @@ import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.iid.FirebaseInstanceId;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -59,6 +60,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import rahul.nirmesh.grabadrive.common.Common;
+import rahul.nirmesh.grabadrive.model.Token;
 import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -81,7 +83,6 @@ public class Welcome extends FragmentActivity
 
     private LocationRequest mLocationRequest;
     private GoogleApiClient mGoogleApiClient;
-    private Location mLastLocation;
 
     DatabaseReference drivers;
     GeoFire geoFire;
@@ -200,6 +201,8 @@ public class Welcome extends FragmentActivity
         setUpLocation();
 
         mService = Common.getGoogleAPI();
+
+        updateFirebaseToken();
     }
 
     @Override
@@ -246,7 +249,7 @@ public class Welcome extends FragmentActivity
 
     @Override
     public void onLocationChanged(Location location) {
-        mLastLocation = location;
+        Common.mLastLocation = location;
         displayLocation();
     }
 
@@ -265,11 +268,11 @@ public class Welcome extends FragmentActivity
             return;
         }
 
-        mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-        if (mLastLocation != null) {
+        Common.mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
+        if (Common.mLastLocation != null) {
             if (location_switch.isChecked()) {
-                final double latitude = mLastLocation.getLatitude();
-                final double longitude = mLastLocation.getLongitude();
+                final double latitude = Common.mLastLocation.getLatitude();
+                final double longitude = Common.mLastLocation.getLongitude();
 
                 // Update to Firebase
                 geoFire.setLocation(FirebaseAuth.getInstance().getCurrentUser().getUid(),
@@ -401,7 +404,7 @@ public class Welcome extends FragmentActivity
     }
 
     private void getDirections() {
-        currentPosition = new LatLng(mLastLocation.getLatitude(), mLastLocation.getLongitude());
+        currentPosition = new LatLng(Common.mLastLocation.getLatitude(), Common.mLastLocation.getLongitude());
 
         String requestApi = null;
 
@@ -498,6 +501,14 @@ public class Welcome extends FragmentActivity
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private void updateFirebaseToken() {
+        FirebaseDatabase db = FirebaseDatabase.getInstance();
+        DatabaseReference tokens = db.getReference(Common.token_tbl);
+
+        Token token = new Token(FirebaseInstanceId.getInstance().getToken());
+        tokens.child(FirebaseAuth.getInstance().getCurrentUser().getUid()).setValue(token);
     }
 
     /**
