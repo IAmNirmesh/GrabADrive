@@ -1,5 +1,6 @@
 package rahul.nirmesh.grabadrive;
 
+import android.content.Intent;
 import android.media.MediaPlayer;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -37,6 +38,8 @@ public class CustomerCall extends AppCompatActivity {
 
     String customerId;
 
+    double lat, lng;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -50,6 +53,17 @@ public class CustomerCall extends AppCompatActivity {
         textAddress = findViewById(R.id.textAddress);
 
         btnAccept = findViewById(R.id.btnAccept);
+        btnAccept.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intentAccept = new Intent(CustomerCall.this, DriverTracking.class);
+                intentAccept.putExtra("lat", lat);
+                intentAccept.putExtra("lng", lng);
+
+                startActivity(intentAccept);
+                finish();
+            }
+        });
 
         btnDecline = findViewById(R.id.btnDecline);
         btnDecline.setOnClickListener(new View.OnClickListener() {
@@ -65,8 +79,8 @@ public class CustomerCall extends AppCompatActivity {
         mediaPlayer.start();
 
         if (getIntent() != null) {
-            double lat = getIntent().getDoubleExtra("lat", -1.0);
-            double lng = getIntent().getDoubleExtra("lng", -1.0);
+            lat = getIntent().getDoubleExtra("lat", -1.0);
+            lng = getIntent().getDoubleExtra("lng", -1.0);
             customerId = getIntent().getStringExtra("customer");
 
             getDirections(lat, lng);
