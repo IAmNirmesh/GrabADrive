@@ -19,8 +19,11 @@ import com.google.android.gms.tasks.OnFailureListener;
 import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.firebase.auth.AuthResult;
 import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 import com.rengwuxian.materialedittext.MaterialEditText;
 
 import dmax.dialog.SpotsDialog;
@@ -94,7 +97,6 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(DialogInterface dialogInterface, int i) {
                 dialogInterface.dismiss();
 
-                // Set disable button Sign In if it is processing
                 btnSignIn.setEnabled(false);
 
                 // Checking Validations
@@ -121,6 +123,21 @@ public class MainActivity extends AppCompatActivity {
                             @Override
                             public void onSuccess(AuthResult authResult) {
                                 waitingDialog.dismiss();
+
+                                FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl)
+                                        .child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                                        .addListenerForSingleValueEvent(new ValueEventListener() {
+                                            @Override
+                                            public void onDataChange(DataSnapshot dataSnapshot) {
+                                                Common.currentUser = dataSnapshot.getValue(User.class);
+                                            }
+
+                                            @Override
+                                            public void onCancelled(DatabaseError databaseError) {
+
+                                            }
+                                        });
+
                                 startActivity(new Intent(MainActivity.this, Welcome.class));
                                 finish();
                             }

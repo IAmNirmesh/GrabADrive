@@ -2,6 +2,7 @@ package rahul.nirmesh.grabadrive.common;
 
 import android.location.Location;
 
+import rahul.nirmesh.grabadrive.model.User;
 import rahul.nirmesh.grabadrive.remote.FCMClient;
 import rahul.nirmesh.grabadrive.remote.IFCMService;
 import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
@@ -17,6 +18,8 @@ public class Common {
     public static final String user_rider_tbl = "RidersInformation";
     public static final String pickup_request_tbl = "PickupRequest";
     public static final String token_tbl = "Tokens";
+
+    public static User currentUser;
 
     public static Location mLastLocation = null;
 

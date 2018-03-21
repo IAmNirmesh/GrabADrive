@@ -59,6 +59,7 @@ public class CustomerCall extends AppCompatActivity {
                 Intent intentAccept = new Intent(CustomerCall.this, DriverTracking.class);
                 intentAccept.putExtra("lat", lat);
                 intentAccept.putExtra("lng", lng);
+                intentAccept.putExtra("customerId", customerId);
 
                 startActivity(intentAccept);
                 finish();
@@ -159,7 +160,7 @@ public class CustomerCall extends AppCompatActivity {
     private void cancelBooking(String customerId) {
         Token token = new Token(customerId);
 
-        Notification notification = new Notification("Notice!", "Driver has Cancelled your Booking Request.");
+        Notification notification = new Notification("Cancel", "Driver has Cancelled your Booking Request.");
 
         Sender sender = new Sender(token.getToken(), notification);
 

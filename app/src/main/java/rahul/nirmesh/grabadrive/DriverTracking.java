@@ -13,6 +13,10 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.Toast;
 
+import com.firebase.geofire.GeoFire;
+import com.firebase.geofire.GeoLocation;
+import com.firebase.geofire.GeoQuery;
+import com.firebase.geofire.GeoQueryEventListener;
 import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.GooglePlayServicesUtil;
 import com.google.android.gms.common.api.GoogleApiClient;
@@ -31,6 +35,8 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.FirebaseDatabase;
 
 import org.json.JSONException;
 import org.json.JSONObject;
@@ -41,6 +47,11 @@ import java.util.List;
 
 import rahul.nirmesh.grabadrive.common.Common;
 import rahul.nirmesh.grabadrive.helper.DirectionsJSONParser;
+import rahul.nirmesh.grabadrive.model.FCMResponse;
+import rahul.nirmesh.grabadrive.model.Notification;
+import rahul.nirmesh.grabadrive.model.Sender;
+import rahul.nirmesh.grabadrive.model.Token;
+import rahul.nirmesh.grabadrive.remote.IFCMService;
 import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -55,6 +66,8 @@ public class DriverTracking extends FragmentActivity
     private GoogleMap mMap;
 
     double riderLat, riderLng;
+
+    String customerId;
 
     private static final int PLAY_SERVICE_RES_REQUEST = 7001;
 
@@ -71,6 +84,9 @@ public class DriverTracking extends FragmentActivity
     private Polyline directions;
 
     IGoogleAPI mService;
+    IFCMService mFCMService;
+
+    GeoFire geoFire;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -84,9 +100,11 @@ public class DriverTracking extends FragmentActivity
         if (getIntent() != null) {
             riderLat = getIntent().getDoubleExtra("lat", -1.0);
             riderLng = getIntent().getDoubleExtra("lng", -1.0);
+            customerId = getIntent().getStringExtra("customerId");
         }
 
         mService = Common.getGoogleAPI();
+        mFCMService = Common.getFCMService();
 
         setUpLocation();
     }
@@ -97,10 +115,40 @@ public class DriverTracking extends FragmentActivity
 
         riderMarker = mMap.addCircle(new CircleOptions()
                 .center(new LatLng(riderLat, riderLng))
-                .radius(10)
+                .radius(50)
                 .strokeColor(Color.BLUE)
                 .fillColor(0x220000FF)
                 .strokeWidth(5.0f));
+
+        geoFire = new GeoFire(FirebaseDatabase.getInstance().getReference(Common.driver_tbl));
+
+        GeoQuery geoQuery = geoFire.queryAtLocation(new GeoLocation(riderLat, riderLng), 0.05f);
+        geoQuery.addGeoQueryEventListener(new GeoQueryEventListener() {
+            @Override
+            public void onKeyEntered(String key, GeoLocation location) {
+                sendArrivedNotification(customerId);
+            }
+
+            @Override
+            public void onKeyExited(String key) {
+
+            }
+
+            @Override
+            public void onKeyMoved(String key, GeoLocation location) {
+
+            }
+
+            @Override
+            public void onGeoQueryReady() {
+
+            }
+
+            @Override
+            public void onGeoQueryError(DatabaseError error) {
+
+            }
+        });
     }
 
     @Override
@@ -298,5 +346,26 @@ public class DriverTracking extends FragmentActivity
 
             directions = mMap.addPolyline(polylineOptions);
         }
+    }
+
+    private void sendArrivedNotification(String customerId) {
+        Token token = new Token(customerId);
+        Notification notification = new Notification("Arrived",
+                String.format("The Driver %s has arrived at your Location.", Common.currentUser.getName()));
+        Sender sender = new Sender(token.getToken(), notification);
+
+        mFCMService.sendMessage(sender).enqueue(new Callback<FCMResponse>() {
+            @Override
+            public void onResponse(Call<FCMResponse> call, Response<FCMResponse> response) {
+                if (response.body().success != 1) {
+                    Toast.makeText(DriverTracking.this, "Failed.", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<FCMResponse> call, Throwable t) {
+
+            }
+        });
     }
 }
