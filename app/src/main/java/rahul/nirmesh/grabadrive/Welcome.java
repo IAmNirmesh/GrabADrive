@@ -3,6 +3,7 @@ package rahul.nirmesh.grabadrive;
 import android.Manifest;
 import android.animation.ValueAnimator;
 import android.content.pm.PackageManager;
+import android.content.res.Resources;
 import android.graphics.Color;
 import android.location.Location;
 import android.os.Handler;
@@ -42,6 +43,7 @@ import com.google.android.gms.maps.model.CameraPosition;
 import com.google.android.gms.maps.model.JointType;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.LatLngBounds;
+import com.google.android.gms.maps.model.MapStyleOptions;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
@@ -256,6 +258,15 @@ public class Welcome extends FragmentActivity
 
     @Override
     public void onMapReady(GoogleMap googleMap) {
+        try {
+            boolean isSuccess = googleMap.setMapStyle(MapStyleOptions.loadRawResourceStyle(this, R.raw.uber_style_map));
+
+            if (!isSuccess)
+                Log.e("ERROR: ", "Map Style Loading Failed!!!");
+        } catch (Resources.NotFoundException e) {
+            e.printStackTrace();
+        }
+
         mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_NORMAL);
         mMap.setTrafficEnabled(false);
@@ -325,14 +336,13 @@ public class Welcome extends FragmentActivity
                         new GeoFire.CompletionListener() {
                             @Override
                             public void onComplete(String key, DatabaseError error) {
-                                // Add Marker
                                 if (mCurrent != null)
-                                    mCurrent.remove(); // Remove the Current State
+                                    mCurrent.remove();
                                 mCurrent = mMap.addMarker(new MarkerOptions()
                                                 .position(new LatLng(latitude, longitude))
-                                                .title("You"));
+                                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.marker))
+                                                .title("Your Location"));
 
-                                // Move Camera to this Current Marker Location
                                 mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 15.0f));
                             }
                         }
