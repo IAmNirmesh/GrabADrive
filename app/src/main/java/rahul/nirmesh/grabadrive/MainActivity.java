@@ -153,7 +153,7 @@ public class MainActivity extends AppCompatActivity {
                                             }
                                         });
 
-                                startActivity(new Intent(MainActivity.this, Welcome.class));
+                                startActivity(new Intent(MainActivity.this, DriverHome.class));
                                 finish();
                             }
                         })

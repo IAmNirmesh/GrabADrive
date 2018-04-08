@@ -3,4 +3,10 @@
     <string name="title_activity_welcome">Map</string>
     <string name="google_direction_api">AIzaSyDe4rP80OguAmcp-ldoR_1fSdhHxFnkRj4</string>
     <string name="title_activity_driver_tracking">Map</string>
+    <string name="title_activity_driver_home">DriverHome</string>
+
+    <string name="navigation_drawer_open">Open navigation drawer</string>
+    <string name="navigation_drawer_close">Close navigation drawer</string>
+
+    <string name="action_settings">Settings</string>
 </resources>

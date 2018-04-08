@@ -39,9 +39,6 @@
             android:name="com.google.android.geo.API_KEY"
             android:value="@string/google_maps_key" />
 
-        <activity
-            android:name=".Welcome"
-            android:label="@string/title_activity_welcome" />
         <activity android:name=".CustomerCall" />
 
         <service android:name=".service.MyFirebaseIdService">
@@ -58,7 +55,11 @@
         <activity
             android:name=".DriverTracking"
             android:label="@string/title_activity_driver_tracking" />
-        <activity android:name=".TripDetail"></activity>
+        <activity android:name=".TripDetail" />
+        <activity
+            android:name=".DriverHome"
+            android:label="@string/title_activity_driver_home"
+            android:theme="@style/AppTheme" />
     </application>
 
 </manifest>
