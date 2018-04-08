@@ -34,4 +34,12 @@ public class Common {
     public static IFCMService getFCMService() {
         return FCMClient.getClient(fcmURL).create(IFCMService.class);
     }
+
+    public static double base_fare = 2.55;
+    private static double time_rate = 0.35;
+    private static double distance_rate = 1.75;
+
+    public static double getPrice(double km, double min) {
+        return (base_fare + (time_rate * min) + (distance_rate * km));
+    }
 }

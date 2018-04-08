@@ -1,8 +1,28 @@
-<fragment xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:map="http://schemas.android.com/apk/res-auto"
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    android:id="@+id/map"
     android:name="com.google.android.gms.maps.SupportMapFragment"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context="rahul.nirmesh.grabadrive.DriverTracking" />
+    tools:context="rahul.nirmesh.grabadrive.DriverTracking">
+
+    <fragment
+        android:id="@+id/map"
+        android:name="com.google.android.gms.maps.SupportMapFragment"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        tools:context="rahul.nirmesh.grabadrive.DriverTracking" />
+
+    <Button
+        android:id="@+id/btnStartTrip"
+        android:text="START TRIP"
+        android:enabled="false"
+        android:layout_alignParentBottom="true"
+        android:background="@drawable/btn_sign_in_background"
+        android:textColor="@android:color/white"
+        android:textStyle="bold"
+        android:layout_margin="16dp"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content" />
+
+</RelativeLayout>
