@@ -1,6 +1,9 @@
 package rahul.nirmesh.grabadrive;
 
 import android.animation.ValueAnimator;
+import android.app.AlertDialog;
+import android.content.DialogInterface;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Color;
@@ -18,8 +21,10 @@ import android.support.v4.widget.DrawerLayout;
 import android.support.v7.app.ActionBarDrawerToggle;
 import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.view.animation.LinearInterpolator;
 import android.widget.Toast;
 
@@ -53,6 +58,10 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.SquareCap;
+import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.Task;
+import com.google.firebase.auth.AuthCredential;
+import com.google.firebase.auth.EmailAuthProvider;
 import com.google.firebase.auth.FirebaseAuth;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
@@ -61,14 +70,18 @@ import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.iid.FirebaseInstanceId;
 import com.google.maps.android.SphericalUtil;
+import com.rengwuxian.materialedittext.MaterialEditText;
 
 import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
+import dmax.dialog.SpotsDialog;
 import rahul.nirmesh.grabadrive.common.Common;
 import rahul.nirmesh.grabadrive.model.Token;
 import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
@@ -291,15 +304,17 @@ public class DriverHome extends AppCompatActivity
         int id = item.getItemId();
 
         if (id == R.id.nav_trip_history) {
-            // Handle the camera action
+
         } else if (id == R.id.nav_way_bill) {
 
+        } else if (id == R.id.nav_change_password) {
+            showDialogChangePassword();
         } else if (id == R.id.nav_help) {
 
         } else if (id == R.id.nav_settings) {
 
         } else if (id == R.id.nav_sign_out) {
-
+            signOut();
         }
 
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
@@ -608,6 +623,90 @@ public class DriverHome extends AppCompatActivity
 
         Token token = new Token(FirebaseInstanceId.getInstance().getToken());
         tokens.child(FirebaseAuth.getInstance().getCurrentUser().getUid()).setValue(token);
+    }
+
+    private void signOut() {
+        FirebaseAuth.getInstance().signOut();
+        Intent intentSignOut = new Intent(DriverHome.this, MainActivity.class);
+        startActivity(intentSignOut);
+        finish();
+    }
+
+    private void showDialogChangePassword() {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(DriverHome.this);
+        alertDialog.setTitle("CHANGE PASSWORD");
+        alertDialog.setMessage("Please Enter All Details");
+
+        LayoutInflater inflater = this.getLayoutInflater();
+        View layout_change_password = inflater.inflate(R.layout.layout_change_password, null);
+
+        final MaterialEditText editOriginalPassword = layout_change_password.findViewById(R.id.editOriginalPassword);
+        final MaterialEditText editNewPassword = layout_change_password.findViewById(R.id.editNewPassword);
+        final MaterialEditText editRetypeNewPassword = layout_change_password.findViewById(R.id.editRetypeNewPassword);
+
+        alertDialog.setView(layout_change_password);
+
+        alertDialog.setPositiveButton("CHANGE PASSWORD", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                final AlertDialog waitingDialog = new SpotsDialog(DriverHome.this);
+                waitingDialog.show();
+
+                if (editNewPassword.getText().toString().equals(editRetypeNewPassword.getText().toString())) {
+                    String email = FirebaseAuth.getInstance().getCurrentUser().getEmail();
+
+                    AuthCredential credential = EmailAuthProvider.getCredential(email, editOriginalPassword.getText().toString());
+                    FirebaseAuth.getInstance().getCurrentUser().reauthenticate(credential).addOnCompleteListener(new OnCompleteListener<Void>() {
+                        @Override
+                        public void onComplete(@NonNull Task<Void> task) {
+                            if (task.isSuccessful()) {
+                                FirebaseAuth.getInstance().getCurrentUser().updatePassword(editRetypeNewPassword.getText().toString())
+                                        .addOnCompleteListener(new OnCompleteListener<Void>() {
+                                            @Override
+                                            public void onComplete(@NonNull Task<Void> task) {
+                                                if (task.isSuccessful()) {
+                                                    Map<String, Object> password = new HashMap<>();
+
+                                                    password.put("password", editRetypeNewPassword.getText().toString());
+                                                    DatabaseReference driverInformation = FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl);
+                                                    driverInformation.child(FirebaseAuth.getInstance().getCurrentUser().getUid()).updateChildren(password)
+                                                            .addOnCompleteListener(new OnCompleteListener<Void>() {
+                                                                @Override
+                                                                public void onComplete(@NonNull Task<Void> task) {
+                                                                    if (task.isSuccessful())
+                                                                        Toast.makeText(DriverHome.this, "Password Changed Successfully.", Toast.LENGTH_SHORT).show();
+                                                                    else
+                                                                        Toast.makeText(DriverHome.this, "Password Changed But Not Updated to Database.", Toast.LENGTH_SHORT).show();
+
+                                                                    waitingDialog.dismiss();
+                                                                }
+                                                            });
+                                                } else {
+                                                    Toast.makeText(DriverHome.this, "Password doesn't change. Please try again.", Toast.LENGTH_SHORT).show();
+                                                }
+                                            }
+                                        });
+                            } else {
+                                waitingDialog.dismiss();
+                                Toast.makeText(DriverHome.this, "Wrong Original Password", Toast.LENGTH_SHORT).show();
+                            }
+                        }
+                    });
+                } else {
+                    waitingDialog.dismiss();
+                    Toast.makeText(DriverHome.this, "Password doesn't match", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+
+        alertDialog.setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+
+        alertDialog.show();
     }
 
     /**
