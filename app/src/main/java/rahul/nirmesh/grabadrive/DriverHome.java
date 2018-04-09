@@ -2,18 +2,21 @@ package rahul.nirmesh.grabadrive;
 
 import android.animation.ValueAnimator;
 import android.app.AlertDialog;
+import android.app.ProgressDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Resources;
 import android.graphics.Color;
 import android.location.Location;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
+import android.text.TextUtils;
 import android.util.Log;
 import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
@@ -26,6 +29,8 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.animation.LinearInterpolator;
+import android.widget.ImageView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import com.firebase.geofire.GeoFire;
@@ -59,6 +64,7 @@ import com.google.android.gms.maps.model.Polyline;
 import com.google.android.gms.maps.model.PolylineOptions;
 import com.google.android.gms.maps.model.SquareCap;
 import com.google.android.gms.tasks.OnCompleteListener;
+import com.google.android.gms.tasks.OnSuccessListener;
 import com.google.android.gms.tasks.Task;
 import com.google.firebase.auth.AuthCredential;
 import com.google.firebase.auth.EmailAuthProvider;
@@ -69,8 +75,13 @@ import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
 import com.google.firebase.database.ValueEventListener;
 import com.google.firebase.iid.FirebaseInstanceId;
+import com.google.firebase.storage.FirebaseStorage;
+import com.google.firebase.storage.OnProgressListener;
+import com.google.firebase.storage.StorageReference;
+import com.google.firebase.storage.UploadTask;
 import com.google.maps.android.SphericalUtil;
 import com.rengwuxian.materialedittext.MaterialEditText;
+import com.squareup.picasso.Picasso;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -80,7 +91,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
+import de.hdodenhof.circleimageview.CircleImageView;
 import dmax.dialog.SpotsDialog;
 import rahul.nirmesh.grabadrive.common.Common;
 import rahul.nirmesh.grabadrive.model.Token;
@@ -132,6 +145,9 @@ public class DriverHome extends AppCompatActivity
     private IGoogleAPI mService;
 
     DatabaseReference onlineRef, currentUserRef;
+
+    FirebaseStorage firebaseStorage;
+    StorageReference storageReference;
 
     Runnable drawPathRunnable = new Runnable() {
         @Override
@@ -190,8 +206,21 @@ public class DriverHome extends AppCompatActivity
         NavigationView navigationView = (NavigationView) findViewById(R.id.nav_view);
         navigationView.setNavigationItemSelectedListener(this);
 
+        View navigationHeaderView = navigationView.getHeaderView(0);
+        TextView txtDriverName = navigationHeaderView.findViewById(R.id.txtDriverName);
+        CircleImageView imageAvatar = navigationHeaderView.findViewById(R.id.imageAvatar);
+
+        txtDriverName.setText(Common.currentUser.getName());
+
+        if (Common.currentUser.getAvatarUrl() != null && !TextUtils.isEmpty(Common.currentUser.getAvatarUrl())) {
+            Picasso.with(this).load(Common.currentUser.getAvatarUrl()).into(imageAvatar);
+        }
+
         mapFragment = (SupportMapFragment) getSupportFragmentManager().findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        firebaseStorage = FirebaseStorage.getInstance();
+        storageReference = firebaseStorage.getReference();
 
         onlineRef = FirebaseDatabase.getInstance().getReference().child(".info/connected");
         currentUserRef = FirebaseDatabase.getInstance().getReference(Common.driver_tbl)
@@ -307,6 +336,8 @@ public class DriverHome extends AppCompatActivity
 
         } else if (id == R.id.nav_way_bill) {
 
+        } else if (id == R.id.nav_update_information) {
+            showDialogUpdateInformation();
         } else if (id == R.id.nav_change_password) {
             showDialogChangePassword();
         } else if (id == R.id.nav_help) {
@@ -707,6 +738,127 @@ public class DriverHome extends AppCompatActivity
         });
 
         alertDialog.show();
+    }
+
+    private void showDialogUpdateInformation() {
+        AlertDialog.Builder alertDialog = new AlertDialog.Builder(DriverHome.this);
+        alertDialog.setTitle("UPDATE INFORMATION");
+        alertDialog.setMessage("Please Enter Your Information");
+
+        LayoutInflater inflater = this.getLayoutInflater();
+        View layout_update_information = inflater.inflate(R.layout.layout_update_information, null);
+
+        final MaterialEditText editUpdateName = layout_update_information.findViewById(R.id.editUpdateName);
+        final MaterialEditText editUpdatePhone = layout_update_information.findViewById(R.id.editUpdatePhone);
+
+        final ImageView imageUpdateUpload = layout_update_information.findViewById(R.id.imageUpdateUpload);
+        imageUpdateUpload.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                selectImage();
+            }
+        });
+
+        alertDialog.setView(layout_update_information);
+
+        alertDialog.setPositiveButton("UPDATE", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+                final AlertDialog waitingDialog = new SpotsDialog(DriverHome.this);
+                waitingDialog.show();
+
+                String updateName = editUpdateName.getText().toString();
+                String updatePhone = editUpdatePhone.getText().toString();
+
+                Map<String, Object> updateInformation = new HashMap<>();
+                if (!TextUtils.isEmpty(updateName))
+                    updateInformation.put("name", updateName);
+                if (!TextUtils.isEmpty(updatePhone))
+                    updateInformation.put("phone", updatePhone);
+
+                DatabaseReference driverInformation = FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl);
+                driverInformation.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                        .updateChildren(updateInformation).addOnCompleteListener(new OnCompleteListener<Void>() {
+                    @Override
+                    public void onComplete(@NonNull Task<Void> task) {
+                        if (task.isSuccessful())
+                            Toast.makeText(DriverHome.this, "Information Updated.", Toast.LENGTH_SHORT).show();
+                        else
+                            Toast.makeText(DriverHome.this, "Information Updating Failed.", Toast.LENGTH_SHORT).show();
+
+                        waitingDialog.dismiss();
+                    }
+                });
+            }
+        });
+
+        alertDialog.setNegativeButton("CANCEL", new DialogInterface.OnClickListener() {
+            @Override
+            public void onClick(DialogInterface dialogInterface, int i) {
+                dialogInterface.dismiss();
+            }
+        });
+
+        alertDialog.show();
+    }
+
+    private void selectImage() {
+        Intent intentSelectImage = new Intent();
+        intentSelectImage.setType("image/*");
+        intentSelectImage.setAction(Intent.ACTION_GET_CONTENT);
+        startActivityForResult(Intent.createChooser(intentSelectImage, "Select Image: "), Common.PICK_IMAGE_REQUEST);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == Common.PICK_IMAGE_REQUEST && resultCode == RESULT_OK
+                && data != null && data.getData() != null) {
+            Uri saveUri = data.getData();
+            if (saveUri != null) {
+                final ProgressDialog mDialog = new ProgressDialog(this);
+                mDialog.setMessage("Uploading...");
+                mDialog.show();
+
+                String imageName = UUID.randomUUID().toString();
+                final StorageReference imageFolder = storageReference.child("images/" + imageName);
+                imageFolder.putFile(saveUri).addOnSuccessListener(new OnSuccessListener<UploadTask.TaskSnapshot>() {
+                    @Override
+                    public void onSuccess(UploadTask.TaskSnapshot taskSnapshot) {
+                        mDialog.dismiss();
+
+                        imageFolder.getDownloadUrl().addOnSuccessListener(new OnSuccessListener<Uri>() {
+                            @Override
+                            public void onSuccess(Uri uri) {
+                                Map<String, Object> avatarUpdate = new HashMap<>();
+                                avatarUpdate.put("avatarUrl", uri.toString());
+
+                                DatabaseReference driverInformation = FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl);
+                                driverInformation.child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                                        .updateChildren(avatarUpdate).addOnCompleteListener(new OnCompleteListener<Void>() {
+                                    @Override
+                                    public void onComplete(@NonNull Task<Void> task) {
+                                        if (task.isSuccessful())
+                                            Toast.makeText(DriverHome.this, "Uploaded Successfully.", Toast.LENGTH_SHORT).show();
+                                        else
+                                            Toast.makeText(DriverHome.this, "Uploading Failed.", Toast.LENGTH_SHORT).show();
+                                    }
+                                });
+                            }
+                        });
+                    }
+                })
+                        .addOnProgressListener(new OnProgressListener<UploadTask.TaskSnapshot>() {
+                            @Override
+                            public void onProgress(UploadTask.TaskSnapshot taskSnapshot) {
+                                double progress = (100.0 * taskSnapshot.getBytesTransferred() / taskSnapshot.getTotalByteCount());
+                                mDialog.setMessage(progress + "% Uploaded");
+                            }
+                        });
+            }
+        }
     }
 
     /**

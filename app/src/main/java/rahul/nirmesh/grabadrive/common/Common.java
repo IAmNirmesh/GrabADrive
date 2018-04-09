@@ -19,6 +19,8 @@ public class Common {
     public static final String pickup_request_tbl = "PickupRequest";
     public static final String token_tbl = "Tokens";
 
+    public static final int PICK_IMAGE_REQUEST = 9999;
+
     public static User currentUser;
 
     public static Location mLastLocation = null;

@@ -5,7 +5,7 @@ package rahul.nirmesh.grabadrive.model;
  */
 
 public class User {
-    private String email, password, name, phone;
+    private String email, password, name, phone, avatarUrl;
 
     public User() {
     }
@@ -47,5 +47,13 @@ public class User {
 
     public void setPhone(String phone) {
         this.phone = phone;
+    }
+
+    public String getAvatarUrl() {
+        return avatarUrl;
+    }
+
+    public void setAvatarUrl(String avatarUrl) {
+        this.avatarUrl = avatarUrl;
     }
 }
