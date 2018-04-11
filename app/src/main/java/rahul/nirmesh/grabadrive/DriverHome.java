@@ -208,9 +208,11 @@ public class DriverHome extends AppCompatActivity
 
         View navigationHeaderView = navigationView.getHeaderView(0);
         TextView txtDriverName = navigationHeaderView.findViewById(R.id.txtDriverName);
+        TextView txtStars = navigationHeaderView.findViewById(R.id.txtStars);
         CircleImageView imageAvatar = navigationHeaderView.findViewById(R.id.imageAvatar);
 
         txtDriverName.setText(Common.currentUser.getName());
+        txtStars.setText(Common.currentUser.getRates());
 
         if (Common.currentUser.getAvatarUrl() != null && !TextUtils.isEmpty(Common.currentUser.getAvatarUrl())) {
             Picasso.with(this).load(Common.currentUser.getAvatarUrl()).into(imageAvatar);
@@ -768,14 +770,14 @@ public class DriverHome extends AppCompatActivity
                 final AlertDialog waitingDialog = new SpotsDialog(DriverHome.this);
                 waitingDialog.show();
 
-                String updateName = editUpdateName.getText().toString();
-                String updatePhone = editUpdatePhone.getText().toString();
+                String name = editUpdateName.getText().toString();
+                String phone = editUpdatePhone.getText().toString();
 
                 Map<String, Object> updateInformation = new HashMap<>();
-                if (!TextUtils.isEmpty(updateName))
-                    updateInformation.put("name", updateName);
-                if (!TextUtils.isEmpty(updatePhone))
-                    updateInformation.put("phone", updatePhone);
+                if (!TextUtils.isEmpty(name))
+                    updateInformation.put("name", name);
+                if (!TextUtils.isEmpty(phone))
+                    updateInformation.put("phone", phone);
 
                 DatabaseReference driverInformation = FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl);
                 driverInformation.child(FirebaseAuth.getInstance().getCurrentUser().getUid())

@@ -401,6 +401,26 @@ public class DriverTracking extends FragmentActivity
         });
     }
 
+    private void sendDropOffNotification(String customerId) {
+        Token token = new Token(customerId);
+        Notification notification = new Notification("DropOff", customerId);
+        Sender sender = new Sender(token.getToken(), notification);
+
+        mFCMService.sendMessage(sender).enqueue(new Callback<FCMResponse>() {
+            @Override
+            public void onResponse(Call<FCMResponse> call, Response<FCMResponse> response) {
+                if (response.body().success != 1) {
+                    Toast.makeText(DriverTracking.this, "Failed.", Toast.LENGTH_SHORT).show();
+                }
+            }
+
+            @Override
+            public void onFailure(Call<FCMResponse> call, Throwable t) {
+
+            }
+        });
+    }
+
     private void calculateFare(final Location pickupLocation, Location mLastLocation) {
         String requestApi = null;
 
@@ -431,6 +451,8 @@ public class DriverTracking extends FragmentActivity
                         JSONObject duration = legsObject.getJSONObject("duration");
                         String duration_text = duration.getString("text");
                         Double duration_value = Double.parseDouble(duration_text.replaceAll("[^0-9\\\\.]+", ""));
+
+                        sendDropOffNotification(customerId);
 
                         Intent intent = new Intent(DriverTracking.this, TripDetail.class);
                         intent.putExtra("start_address", legsObject.getString("start_address"));
