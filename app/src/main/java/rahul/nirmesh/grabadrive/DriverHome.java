@@ -95,6 +95,7 @@ import java.util.UUID;
 
 import de.hdodenhof.circleimageview.CircleImageView;
 import dmax.dialog.SpotsDialog;
+import io.paperdb.Paper;
 import rahul.nirmesh.grabadrive.common.Common;
 import rahul.nirmesh.grabadrive.model.Token;
 import rahul.nirmesh.grabadrive.remote.IGoogleAPI;
@@ -659,6 +660,10 @@ public class DriverHome extends AppCompatActivity
     }
 
     private void signOut() {
+
+        Paper.init(this);
+        Paper.book().destroy();
+
         FirebaseAuth.getInstance().signOut();
         Intent intentSignOut = new Intent(DriverHome.this, MainActivity.class);
         startActivity(intentSignOut);

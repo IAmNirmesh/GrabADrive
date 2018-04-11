@@ -55,5 +55,7 @@ dependencies {
     implementation 'de.hdodenhof:circleimageview:2.2.0'
 
     implementation 'com.google.maps.android:android-maps-utils:0.5+'
+
+    implementation 'io.paperdb:paperdb:2.6'
 }
 apply plugin: 'com.google.gms.google-services'

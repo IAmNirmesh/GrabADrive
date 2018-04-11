@@ -25,6 +25,9 @@ public class Common {
 
     public static Location mLastLocation = null;
 
+    public static final String user_field = "usr";
+    public static final String password_field = "pwd";
+
     public static final String baseURL = "https://maps.googleapis.com";
 
     public static IGoogleAPI getGoogleAPI() {

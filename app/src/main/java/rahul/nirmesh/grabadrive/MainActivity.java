@@ -31,6 +31,7 @@ import com.google.firebase.database.ValueEventListener;
 import com.rengwuxian.materialedittext.MaterialEditText;
 
 import dmax.dialog.SpotsDialog;
+import io.paperdb.Paper;
 import rahul.nirmesh.grabadrive.common.Common;
 import rahul.nirmesh.grabadrive.model.User;
 import uk.co.chrisjenx.calligraphy.CalligraphyConfig;
@@ -60,6 +61,8 @@ public class MainActivity extends AppCompatActivity {
                                                     .setFontAttrId(R.attr.fontPath)
                                                     .build());
         setContentView(R.layout.activity_main);
+
+        Paper.init(this);
 
         auth = FirebaseAuth.getInstance();
         database = FirebaseDatabase.getInstance();
@@ -91,6 +94,15 @@ public class MainActivity extends AppCompatActivity {
                 return false;
             }
         });
+
+        String user = Paper.book().read(Common.user_field);
+        String password = Paper.book().read(Common.password_field);
+
+        if (user != null && password != null) {
+            if (!TextUtils.isEmpty(user) && !TextUtils.isEmpty(password)) {
+                autoLogin(user, password);
+            }
+        }
     }
 
     private void showLoginDialog() {
@@ -144,6 +156,9 @@ public class MainActivity extends AppCompatActivity {
                                         .addListenerForSingleValueEvent(new ValueEventListener() {
                                             @Override
                                             public void onDataChange(DataSnapshot dataSnapshot) {
+                                                Paper.book().write(Common.user_field, loginEmail.getText().toString());
+                                                Paper.book().write(Common.password_field, loginPassword.getText().toString());
+
                                                 Common.currentUser = dataSnapshot.getValue(User.class);
                                                 startActivity(new Intent(MainActivity.this, DriverHome.class));
                                                 finish();
@@ -313,6 +328,45 @@ public class MainActivity extends AppCompatActivity {
         });
 
         alertDialog.show();
+    }
+
+    private void autoLogin(String user, String password) {
+        final AlertDialog waitingDialog = new SpotsDialog(MainActivity.this);
+        waitingDialog.show();
+
+        auth.signInWithEmailAndPassword(user, password)
+                .addOnSuccessListener(new OnSuccessListener<AuthResult>() {
+                    @Override
+                    public void onSuccess(AuthResult authResult) {
+                        waitingDialog.dismiss();
+
+                        FirebaseDatabase.getInstance().getReference(Common.user_driver_tbl)
+                                .child(FirebaseAuth.getInstance().getCurrentUser().getUid())
+                                .addListenerForSingleValueEvent(new ValueEventListener() {
+                                    @Override
+                                    public void onDataChange(DataSnapshot dataSnapshot) {
+                                        Common.currentUser = dataSnapshot.getValue(User.class);
+                                        startActivity(new Intent(MainActivity.this, DriverHome.class));
+                                        waitingDialog.dismiss();
+                                        finish();
+                                    }
+
+                                    @Override
+                                    public void onCancelled(DatabaseError databaseError) {
+
+                                    }
+                                });
+                    }
+                })
+                .addOnFailureListener(new OnFailureListener() {
+                    @Override
+                    public void onFailure(@NonNull Exception e) {
+                        waitingDialog.dismiss();
+                        Snackbar.make(rootLayout, "Failed " + e.getMessage(), Snackbar.LENGTH_SHORT).show();
+
+                        btnSignIn.setEnabled(true);
+                    }
+                });
     }
 
     @Override
