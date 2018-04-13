@@ -12,8 +12,8 @@ import android.location.Location;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.support.annotation.NonNull;
-import android.support.annotation.Nullable;
 import android.support.design.widget.Snackbar;
 import android.support.v4.app.ActivityCompat;
 import android.text.TextUtils;
@@ -36,12 +36,11 @@ import android.widget.Toast;
 import com.firebase.geofire.GeoFire;
 import com.firebase.geofire.GeoLocation;
 import com.github.glomadrian.materialanimatedswitch.MaterialAnimatedSwitch;
-import com.google.android.gms.common.ConnectionResult;
-import com.google.android.gms.common.GooglePlayServicesUtil;
-import com.google.android.gms.common.api.GoogleApiClient;
 import com.google.android.gms.common.api.Status;
-import com.google.android.gms.location.LocationListener;
+import com.google.android.gms.location.FusedLocationProviderClient;
+import com.google.android.gms.location.LocationCallback;
 import com.google.android.gms.location.LocationRequest;
+import com.google.android.gms.location.LocationResult;
 import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.location.places.AutocompleteFilter;
 import com.google.android.gms.location.places.Place;
@@ -105,22 +104,20 @@ import retrofit2.Response;
 
 public class DriverHome extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener,
-                    OnMapReadyCallback,
-                    GoogleApiClient.ConnectionCallbacks,
-                    GoogleApiClient.OnConnectionFailedListener,
-                    LocationListener {
+                        OnMapReadyCallback {
 
     private GoogleMap mMap;
 
+    FusedLocationProviderClient fusedLocationProviderClient;
+    LocationCallback locationCallback;
+
     private static final int MY_PERMISSION_REQUEST_CODE = 7000;
-    private static final int PLAY_SERVICE_RES_REQUEST = 7001;
 
     private static int UPDATE_INTERVAL = 5000;
     private static int FASTEST_INTERVAL = 3000;
     private static int DISPLACEMENT = 10;
 
     private LocationRequest mLocationRequest;
-    private GoogleApiClient mGoogleApiClient;
 
     DatabaseReference drivers;
     GeoFire geoFire;
@@ -198,6 +195,8 @@ public class DriverHome extends AppCompatActivity
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
 
+        fusedLocationProviderClient = LocationServices.getFusedLocationProviderClient(this);
+
         DrawerLayout drawer = (DrawerLayout) findViewById(R.id.drawer_layout);
         ActionBarDrawerToggle toggle = new ActionBarDrawerToggle(
                 this, drawer, toolbar, R.string.navigation_drawer_open, R.string.navigation_drawer_close);
@@ -249,13 +248,21 @@ public class DriverHome extends AppCompatActivity
                 if (isOnline) {
                     FirebaseDatabase.getInstance().goOnline();
 
-                    startLocationUpdates();
+                    if (ActivityCompat.checkSelfPermission(DriverHome.this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                            ActivityCompat.checkSelfPermission(DriverHome.this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                        return;
+                    }
+                    buildLocationCallBack();
+                    buildLocationRequest();
+                    fusedLocationProviderClient.requestLocationUpdates(mLocationRequest, locationCallback, Looper.myLooper());
+
                     displayLocation();
                     Snackbar.make(mapFragment.getView(), "You are Online.", Snackbar.LENGTH_SHORT).show();
                 } else {
                     FirebaseDatabase.getInstance().goOffline();
 
-                    stopLocationUpdates();
+                    fusedLocationProviderClient.removeLocationUpdates(locationCallback);
+
                     mCurrent.remove();
                     mMap.clear();
                     handler.removeCallbacks(drawPathRunnable);
@@ -291,7 +298,6 @@ public class DriverHome extends AppCompatActivity
             }
         });
 
-        // Geo Fire
         drivers = FirebaseDatabase.getInstance().getReference(Common.driver_tbl);
         geoFire = new GeoFire(drivers);
 
@@ -361,13 +367,11 @@ public class DriverHome extends AppCompatActivity
         switch (requestCode) {
             case MY_PERMISSION_REQUEST_CODE:
                 if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                    if (checkPlayServices()) {
-                        buildGoogleApiClient();
-                        createLocationRequest();
+                    buildLocationCallBack();
+                    buildLocationRequest();
 
-                        if (location_switch.isChecked())
-                            displayLocation();
-                    }
+                    if (location_switch.isChecked())
+                        displayLocation();
                 }
         }
     }
@@ -389,37 +393,14 @@ public class DriverHome extends AppCompatActivity
         mMap.setIndoorEnabled(false);
         mMap.setBuildingsEnabled(false);
         mMap.getUiSettings().setZoomControlsEnabled(true);
-    }
 
-    @Override
-    public void onConnected(@Nullable Bundle bundle) {
-        displayLocation();
-        startLocationUpdates();
-    }
-
-    @Override
-    public void onConnectionSuspended(int i) {
-        mGoogleApiClient.connect();
-    }
-
-    @Override
-    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
-
-    }
-
-    @Override
-    public void onLocationChanged(Location location) {
-        Common.mLastLocation = location;
-        displayLocation();
-    }
-
-    private void startLocationUpdates() {
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-
-        LocationServices.FusedLocationApi.requestLocationUpdates(mGoogleApiClient, mLocationRequest, this);
+        buildLocationRequest();
+        buildLocationCallBack();
+        fusedLocationProviderClient.requestLocationUpdates(mLocationRequest, locationCallback, Looper.myLooper());
     }
 
     private void displayLocation() {
@@ -428,107 +409,87 @@ public class DriverHome extends AppCompatActivity
             return;
         }
 
-        Common.mLastLocation = LocationServices.FusedLocationApi.getLastLocation(mGoogleApiClient);
-        if (Common.mLastLocation != null) {
-            if (location_switch.isChecked()) {
-                final double latitude = Common.mLastLocation.getLatitude();
-                final double longitude = Common.mLastLocation.getLongitude();
+        fusedLocationProviderClient.getLastLocation().addOnSuccessListener(new OnSuccessListener<Location>() {
+            @Override
+            public void onSuccess(Location location) {
+                Common.mLastLocation = location;
 
-                LatLng center = new LatLng(latitude, longitude);
-                // Heading: 0 - NorthSide, 90 - EastSide, 180 - SouthSide, 270 - WestSide
-                LatLng northSide = SphericalUtil.computeOffset(center, 100000, 0);
-                LatLng southSide = SphericalUtil.computeOffset(center, 100000, 180);
+                if (Common.mLastLocation != null) {
+                    if (location_switch.isChecked()) {
+                        final double latitude = Common.mLastLocation.getLatitude();
+                        final double longitude = Common.mLastLocation.getLongitude();
 
-                LatLngBounds bounds = LatLngBounds.builder()
-                        .include(northSide)
-                        .include(southSide)
-                        .build();
+                        LatLng center = new LatLng(latitude, longitude);
+                        // Heading: 0 - NorthSide, 90 - EastSide, 180 - SouthSide, 270 - WestSide
+                        LatLng northSide = SphericalUtil.computeOffset(center, 100000, 0);
+                        LatLng southSide = SphericalUtil.computeOffset(center, 100000, 180);
 
-                places.setBoundsBias(bounds);
-                places.setFilter(typeFilter);
+                        LatLngBounds bounds = LatLngBounds.builder()
+                                .include(northSide)
+                                .include(southSide)
+                                .build();
 
-                geoFire.setLocation(FirebaseAuth.getInstance().getCurrentUser().getUid(),
-                        new GeoLocation(latitude, longitude),
-                        new GeoFire.CompletionListener() {
-                            @Override
-                            public void onComplete(String key, DatabaseError error) {
-                                if (mCurrent != null)
-                                    mCurrent.remove();
-                                mCurrent = mMap.addMarker(new MarkerOptions()
-                                        .position(new LatLng(latitude, longitude))
-                                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.marker))
-                                        .title("Your Location"));
+                        places.setBoundsBias(bounds);
+                        places.setFilter(typeFilter);
 
-                                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 15.0f));
-                            }
-                        }
-                );
-            } else {
-                Log.d("ERROR: ", "Cannot Find Your Location");
+                        geoFire.setLocation(FirebaseAuth.getInstance().getCurrentUser().getUid(),
+                                new GeoLocation(latitude, longitude),
+                                new GeoFire.CompletionListener() {
+                                    @Override
+                                    public void onComplete(String key, DatabaseError error) {
+                                        if (mCurrent != null)
+                                            mCurrent.remove();
+                                        mCurrent = mMap.addMarker(new MarkerOptions()
+                                                .position(new LatLng(latitude, longitude))
+                                                .icon(BitmapDescriptorFactory.fromResource(R.drawable.marker))
+                                                .title("Your Location"));
+
+                                        mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 15.0f));
+                                    }
+                                }
+                        );
+                    } else {
+                        Log.d("ERROR: ", "Cannot Find Your Location");
+                    }
+                }
             }
-        }
-    }
-
-    private void stopLocationUpdates() {
-        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
-                ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            return;
-        }
-
-        LocationServices.FusedLocationApi.removeLocationUpdates(mGoogleApiClient, this);
+        });
     }
 
     private void setUpLocation() {
         if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED &&
                 ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // Request Runtime Permission
             ActivityCompat.requestPermissions(this, new String[]{
                     android.Manifest.permission.ACCESS_COARSE_LOCATION,
                     android.Manifest.permission.ACCESS_FINE_LOCATION
             }, MY_PERMISSION_REQUEST_CODE);
         } else {
-            if (checkPlayServices()) {
-                buildGoogleApiClient();
-                createLocationRequest();
+            buildLocationRequest();
+            buildLocationCallBack();
 
-                if (location_switch.isChecked())
-                    displayLocation();
-            }
+            if (location_switch.isChecked())
+                displayLocation();
         }
     }
 
-    private boolean checkPlayServices() {
-        int resultCode = GooglePlayServicesUtil.isGooglePlayServicesAvailable(this);
-        if (resultCode != ConnectionResult.SUCCESS) {
-            if (GooglePlayServicesUtil.isUserRecoverableError(resultCode))
-                GooglePlayServicesUtil.getErrorDialog(resultCode, this, PLAY_SERVICE_RES_REQUEST).show();
-            else {
-                Toast.makeText(this, "This Device is not Supported", Toast.LENGTH_SHORT).show();
-                finish();
-            }
-
-            return false;
-        }
-
-        return true;
-    }
-
-    private void buildGoogleApiClient() {
-        mGoogleApiClient = new GoogleApiClient.Builder(this)
-                .addConnectionCallbacks(this)
-                .addOnConnectionFailedListener(this)
-                .addApi(LocationServices.API)
-                .build();
-
-        mGoogleApiClient.connect();
-    }
-
-    private void createLocationRequest() {
+    private void buildLocationRequest() {
         mLocationRequest = new LocationRequest();
         mLocationRequest.setInterval(UPDATE_INTERVAL);
         mLocationRequest.setFastestInterval(FASTEST_INTERVAL);
         mLocationRequest.setPriority(LocationRequest.PRIORITY_HIGH_ACCURACY);
         mLocationRequest.setSmallestDisplacement(DISPLACEMENT);
+    }
+
+    private void buildLocationCallBack() {
+        locationCallback = new LocationCallback() {
+            @Override
+            public void onLocationResult(LocationResult locationResult) {
+                for (Location location : locationResult.getLocations()) {
+                    Common.mLastLocation = location;
+                }
+                displayLocation();
+            }
+        };
     }
 
     private float getBearing(LatLng startPosition, LatLng endPosition) {
